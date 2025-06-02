@@ -1,0 +1,197 @@
+--Brazilian e-commerce data has following key tables
+
+--"customers"
+--"geolocation"
+--"order_items"
+--"order_payment"
+--"orders"
+--"product_translation_name"
+--"products"
+--"sellers"
+
+-- basic level queries 1-6
+
+--1.What are the top 5 most common customer states in the dataset?
+
+select customer_state, count(*) as customer_count
+from `brazilian_ecommerce.customers`
+group by customer_state
+order by customer_count
+limit 5;
+
+--2.Count how many orders have each status (e.g., delivered, shipped).
+
+select order_status,count(*) as count_of_status
+from `brazilian_ecommerce.orders`
+where order_status is not null
+group by order_status;
+
+--3.List the 5 most common product categories (use the translated category name)
+
+select pn.product_category_name_english,count(*) as total_categories
+from `brazilian_ecommerce.products` as p join `brazilian_ecommerce.product_translation_name` as pn
+on p.product_category_name = pn.product_category_name
+group by pn.product_category_name_english
+order by total_categories desc
+limit 5;
+
+--4.Customers who's order is shipped
+
+select distinct(customer_id)
+from`brazilian_ecommerce.orders` 
+where order_status ='shipped';
+
+--5.List all sellers from the state of São Paulo 
+
+select seller_id,seller_state
+from `brazilian_ecommerce.sellers`
+where seller_state like "SP";
+
+--6.How many unique customers are there in the dataset?
+
+select count(distinct(customer_unique_id)) as unique_customers
+from `brazilian_ecommerce.customers`;
+
+--intermidiate level queries 7-14
+
+--7.Find the average freight_value per seller. Sort by highest average.
+
+select seller_id, round(avg(freight_value),2) as average_freight_value
+from `brazilian_ecommerce.order_items`
+group by seller_id
+order by average_freight_value desc;
+
+--8.List the top 5 products by total revenue.
+
+select product_id ,round(sum(price),0) as total_revenue 
+from `brazilian_ecommerce.order_items`
+group by product_id
+order by total_revenue desc
+limit 5;
+
+--9.categorize products as "Light", "Medium", "Heavy" based on their weight.
+
+select product_id,
+case
+when product_weight_g < 1000 then "light"
+when product_weight_g between 1000 and 5000 then "medium"
+else "heavy"
+end as weight_category
+from `brazilian_ecommerce.products`
+where product_id is not null;
+
+--10.List all sellers along with the total number of orders they’ve fulfilled and place them in decending order
+
+select s.seller_id,count(*) as total_orders
+from `brazilian_ecommerce.order_items` as o left join `brazilian_ecommerce.sellers` as s  
+on o.seller_id = s.seller_id
+where s.seller_id is not null 
+group by s.seller_id
+order by total_orders desc;
+
+--11.Find all products and their total revenue
+
+select p.product_id,ptn.product_category_name_english,round(sum(o.price),0) as total_revenue
+from `brazilian_ecommerce.order_items` as o left join `brazilian_ecommerce.products` as p 
+on o.product_id=p.product_id left join `brazilian_ecommerce.product_translation_name` as ptn
+on p.product_category_name = ptn.product_category_name
+where p.product_id is not null
+group by p.product_id , ptn.product_category_name_english;
+
+--12.find all ZIP code prefixes that appear in either the customers or the sellers table. Show the following columns:
+--customer_zip_code_prefix
+--seller_zip_code_prefix
+--Number of distinct customers (if any) for each ZIP
+--Number of distinct sellers (if any) for each ZIP
+--skip null values rows 
+
+select c.customer_zip_code_prefix,s.seller_zip_code_prefix,count(distinct(c.customer_id)) as customer_count,count(distinct(s.seller_id)) as seller_count
+from `brazilian_ecommerce.customers` as c full outer join `brazilian_ecommerce.sellers` as s  
+on c.customer_zip_code_prefix = s.seller_zip_code_prefix 
+where c.customer_zip_code_prefix is not null and s.seller_zip_code_prefix is not null
+group by c.customer_zip_code_prefix,s.seller_zip_code_prefix ;
+
+--13.find the top 5 product categories (in English) that generated the highest total revenue (sum of price) from sales.
+
+select ptn.product_category_name_english , count(ot.price) as total_revenue
+from `brazilian_ecommerce.order_items` as ot inner join `brazilian_ecommerce.products` as p 
+on ot.product_id = p.product_id inner join `brazilian_ecommerce.product_translation_name` as ptn
+on p.product_category_name = ptn.product_category_name_english 
+group by ptn.product_category_name_english
+order by total_revenue desc
+limit 5;
+
+--14.Find the average product weight grouped by product category(use the translated category name)
+
+select ptn.product_category_name_english,round(avg(p.product_weight_g),1) as average_weight
+from `brazilian_ecommerce.products` as p join `brazilian_ecommerce.product_translation_name` as ptn
+on p.product_category_name=ptn.product_category_name
+group by ptn.product_category_name_english;
+
+--Advance queries 15-18
+
+--15.Seller average freight vs overall
+
+select seller_id,AVG(freight_value) AS seller_avg_freight,
+case
+when avg(freight_value) > (
+select avg(freight_value)
+from `brazilian_ecommerce.order_items`) THEN 'Above Average'
+ELSE 'Below Average'
+END AS comparison_to_overall
+FROM `brazilian_ecommerce.order_items`
+GROUP BY seller_id
+ORDER BY seller_avg_freight DESC;
+
+--16.Find the sellers whose total revenue is above the average seller revenue.
+
+select seller_id,round(sum(price),1) as total_revenue
+from `brazilian_ecommerce.order_items` 
+group by seller_id 
+having sum(price)> (SELECT AVG(seller_revenue)
+FROM (
+SELECT seller_id, SUM(price) AS seller_revenue
+FROM `brazilian_ecommerce.order_items`
+GROUP BY seller_id
+) AS avg_seller_table);
+
+--17.For each order, calculate the total amount paid (from order_payments) and the total amount charged (sum of price + freight_value from order_items). Then, find the difference between them. Show only orders where there is a mismatch greater than 0.01 BRL between the amount paid and amount charged.
+
+select op.order_id,round(sum(op.payment_value),1) as total_paid,round(sum(ot.price+ot.freight_value),1) as total_charged,round(sum(op.payment_value)-sum(ot.price+ot.freight_value),1) as difference 
+from `brazilian_ecommerce.order_payments` as op left join `brazilian_ecommerce.order_items` as ot 
+on op.order_id=ot.order_id
+group by op.order_id
+having abs(sum(op.payment_value)-(sum(ot.price+ot.freight_value))) > 0.01 -- abs is absolute value (skips negative value)
+order by difference desc;
+
+--18.For each seller, calculate the total amount paid per order they participated in, and show how that payment compares to the average payment per order for that seller using PARTITION BY. Include only sellers who were involved in at least one order.
+
+select s.seller_id,op.order_id,sum(op.payment_value) as total_order_payment,avg(sum(op.payment_value)) over (partition by s.seller_id) as average_payment_per_order
+from `brazilian_ecommerce.order_items` as oi join `brazilian_ecommerce.sellers` as s  
+on oi.seller_id=s.seller_id join `brazilian_ecommerce.order_payments` as op on  
+op.order_id=oi.order_id
+group by s.seller_id,op.order_id
+order by s.seller_id, op.order_id;
+
+--19.For each seller, find the earliest and latest payment from the orders they were part of, and the total amount received. Only include sellers with total payments greater than 1000 BRL.
+
+select s.seller_id,min(op.payment_sequential) as earliest_payment ,max(op.payment_sequential) as latest_payment,round(sum(op.payment_value),1) as total_payment
+from `brazilian_ecommerce.order_payments` as op left join `brazilian_ecommerce.order_items` as oi 
+on op.order_id=oi.order_id join `brazilian_ecommerce.sellers` as s  
+on oi.seller_id = s.seller_id 
+group by s.seller_id
+having total_payment > 1000
+order by total_payment desc;
+
+
+-- These queries demonstrate my ability to work with:
+
+-- Basic SQL operations (`SELECT`, `WHERE`, `GROUP BY`, `ORDER BY`)
+-- Joins (`INNER`, `LEFT`, etc.)
+-- Aggregate functions (`COUNT`, `AVG`, `MAX`, `MIN`)
+-- Window functions('partition_by')
+-- Subqueries and conditional logic('case','corelated queries')
+-- Data analysis
+
+
+
