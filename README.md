@@ -13,8 +13,8 @@ This project explores Brazil’s largest e-commerce dataset from Olist, focusing
 
 🔍 [Brazil E-Commerce Analysis by Satyajeet Katkar](https://console.cloud.google.com/bigquery?sq=874334219759:8b2252cdf98d45b7a730a22ad1273999)
 
-## :computer: Dataset Used
-<a href="https://github.com/jeet787/Brazil-Ecommerce-Analysis/blob/main/brazilian_ecommerce_dataset.sql">Dataset Used</a>
+## 💻 Dataset Used
+<a href="https://github.com/jeet787/Brazil-Ecommerce-Analysis/blob/main/brazilian_ecommerce_dataset.sql">📄 Dataset Used</a>
 
 ## ⚙️ Tech Stack
 
